@@ -1,0 +1,74 @@
+name: Node.js CI/CD (pnpm)
+
+on:
+  push:
+    branches: ["master"]
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions: # Add permissions
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "23.4.0"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10.6.2
+          run_install: false
+
+      - name: Install dependencies (pnpm)
+        run: pnpm install --frozen-lockfile --prod
+
+      - name: Build Docker image
+        run: docker build -t ghcr.io/${{ github.repository_owner }}/social-backend:latest .
+
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Push Docker image
+        run: docker push ghcr.io/${{ github.repository_owner }}/social-backend:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to DigitalOcean via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            docker stop social-backend || true
+            docker rm social-backend || true
+            docker login ghcr.io -u ${{ github.repository_owner }} --password ${{ secrets.GITHUB_TOKEN }}
+            docker pull ghcr.io/${{ github.repository_owner }}/social-backend:latest
+            docker run -d --restart=always \
+              -p ${{ secrets.PORT }}:7002 \
+              --name social-backend \
+              -e ATLAS_URI="${{ secrets.ATLAS_URI }}" \
+              -e CLOUD_API_KEY="${{ secrets.CLOUD_API_KEY }}" \
+              -e CLOUD_API_SECRET="${{ secrets.CLOUD_API_SECRET }}" \
+              -e CLOUD_NAME="${{ secrets.CLOUD_NAME }}" \
+              -e JWT_ACCESS_SECRET="${{ secrets.JWT_ACCESS_SECRET }}" \
+              -e MAIL_HOST="${{ secrets.MAIL_HOST }}" \
+              -e MAIL_PASSWORD="${{ secrets.MAIL_PASSWORD }}" \
+              -e MAIL_USERNAME="${{ secrets.MAIL_USERNAME }}" \
+              -e SERVICE_NAME="${{ secrets.SERVICE_NAME }}" \
+              -e PORT="${{ secrets.PORT }}" \
+              -e STRIPE_SECRET_KEY="${{ secrets.STRIPE_SECRET_KEY }}" \
+              -e STRIPE_WEBHOOK_SECRET="${{ secrets.STRIPE_WEBHOOK_SECRET }}"\
+              -e OTP_LENGTH="${{ secrets.OTP_LENGTH }}" \
+              ghcr.io/${{ github.repository_owner }}/social-backend:latest
+            docker image prune -f
