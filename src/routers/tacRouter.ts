@@ -1,5 +1,5 @@
 import express from "express";
-import TaCController from "@controllers/tacControllers";
+import TaCController from "@controllers/tacController";
 import { admin_authorize, authorize } from "@middlewares/authorization";
 import { asyncHandler } from "@shared/asyncHandler";
 

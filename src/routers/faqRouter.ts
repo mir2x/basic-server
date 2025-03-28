@@ -1,4 +1,4 @@
-import FaqController from "@controllers/faqControllers";
+import FaqController from "@controllers/faqController";
 import express from "express";
 import { admin_authorize, authorize } from "@middlewares/authorization";
 import { asyncHandler } from "@shared/asyncHandler";

@@ -1,23 +1,40 @@
 import { Socket, Server as SocketIOServer } from "socket.io";
 import { Server as HttpServer } from "http";
 import { logger } from "@shared/logger";
+import { Decoded, decodeToken } from "@utils/jwt";
+import { HttpError } from "http-errors";
 
 const onlineUsers = new Map<string, string>();
+let io: SocketIOServer;
 
 const initializeSocket = (server: HttpServer) => {
-  const io = new SocketIOServer(server, {
+  io = new SocketIOServer(server, {
     cors: {
       origin: "*",
       methods: ["GET", "POST", "PATCH", "DELETE"],
     },
   });
-  io.on("connection", (socket: Socket) => {
-    logger.info("⚡ User connected: ${socket.id}");
 
-    socket.on("user-online", (userId: string) => {
-      onlineUsers.set(userId, socket.id);
-      logger.info("✅ User ${userId} is online");
-    });
+  io.use((socket: Socket, next) => {
+    const token = socket.handshake.auth.token;
+    console.log(token);
+    if (!token) {
+      return next(new Error("Unauthorized"));
+    }
+    let decoded: Decoded;
+    try {
+      decoded = decodeToken("accessxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", token);
+      socket.userId = decoded.id;
+    } catch (e: any) {
+      return next(e);
+    }
+    next();
+  });
+
+  io.on("connection", (socket: Socket) => {
+    const userId = socket.userId;
+    logger.info(`⚡ User connected: ${userId}`);
+    onlineUsers.set(userId, socket.id);
 
     socket.on("disconnect", () => {
       onlineUsers.forEach((value: string, key: string) => {
@@ -30,4 +47,4 @@ const initializeSocket = (server: HttpServer) => {
   });
 };
 
-export default initializeSocket;
+export { initializeSocket as default, io, onlineUsers };

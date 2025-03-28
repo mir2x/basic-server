@@ -1,5 +1,5 @@
 import express from "express";
-import PrivacyController from "@controllers/privacyControllers";
+import PrivacyController from "@controllers/privacyController";
 import { admin_authorize, authorize } from "@middlewares/authorization";
 import { asyncHandler } from "@shared/asyncHandler";
 
